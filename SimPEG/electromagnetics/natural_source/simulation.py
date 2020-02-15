@@ -56,7 +56,7 @@ class BaseNSEMSimulation(BaseFDEMSimulation):
 
         # Calculate the fields if not given as input
         if f is None:
-           f = self.fields(m)
+           f = self.fields_old(m)
         # Set current model
         self.model = m
         # Initiate the Jv object
@@ -73,7 +73,7 @@ class BaseNSEMSimulation(BaseFDEMSimulation):
                 # We need fDeriv_m = df/du*du/dm + df/dm
                 # Construct du/dm, it requires a solve
                 # NOTE: need to account for the 2 polarizations in the derivatives.
-                u_src = f[src,:] # u should be a vector by definition. Need to fix this...
+                u_src = f[src, :] # u should be a vector by definition. Need to fix this...
                 # dA_dm and dRHS_dm should be of size nE,2, so that we can multiply by Ainv.
                 # The 2 columns are each of the polarizations.
                 dA_dm_v = self.getADeriv(freq, u_src, v) # Size: nE,2 (u_px,u_py) in the columns.
@@ -101,11 +101,12 @@ class BaseNSEMSimulation(BaseFDEMSimulation):
 
         # Calculate the fields if not given as input
         if f is None:
-           f = self.fields2(m).compute()
+           f = self.fields(m).compute()
         # Set current model
         self.model = m
         # Initiate the Jv object
-        Jv = Data(self.survey)
+        # Jv = Data(self.survey)
+        Jv = []
 
         # Loop all the frequenies
         for nF, freq in enumerate(self.survey.frequencies):
@@ -123,15 +124,18 @@ class BaseNSEMSimulation(BaseFDEMSimulation):
                 # The 2 columns are each of the polarizations.
                 dA_dm_v = self.getADeriv(freq, u_src, v) # Size: nE,2 (u_px,u_py) in the columns.
                 dRHS_dm_v = self.getRHSDeriv(freq, v) # Size: nE,2 (u_px,u_py) in the columns.
+
                 # Calculate du/dm*v
-                du_dm_v = self.Ainv[nF] * ( - dA_dm_v + dRHS_dm_v)
+                du_dm_v = self.Ainv[nF] * (-dA_dm_v + dRHS_dm_v)
                 # Calculate the projection derivatives
                 for rx in src.receiver_list:
                     # Calculate dP/du*du/dm*v
-                    Jv[src, rx] = rx.evalDeriv(src, self.mesh, f, mkvc(du_dm_v)) # wrt uPDeriv_u(mkvc(du_dm))
+                    Jv_ = da.asarray(rx.evalDeriv(src, self.mesh, f, mkvc(du_dm_v)))
+                    Jv.append(Jv_)  # wrt uPDeriv_u(mkvc(du_dm))
             # Ainv.clean()
         # Return the vectorized sensitivities
-        return mkvc(Jv)
+        return da.hstack(Jv).compute()
+        # return mkvc(Jv)
 
     def Jtvec_old(self, m, v, f=None):
         """
@@ -145,7 +149,7 @@ class BaseNSEMSimulation(BaseFDEMSimulation):
         """
 
         if f is None:
-            f = self.fields(m)
+            f = self.fields_old(m)
 
         self.model = m
 
