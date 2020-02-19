@@ -10,6 +10,8 @@ from SimPEG import Utils, Mesh
 from SimPEG.EM.Static import DC
 from SimPEG.Utils import asArray_N_x_Dim, uniqueRows
 
+from scipy.spatial import cKDTree
+
 
 def electrode_separations(
     dc_survey, survey_type='dipole-dipole', electrode_pair='All'
@@ -1533,35 +1535,44 @@ def gettopoCC(mesh, actind, option="top"):
             return mesh1D, topoCC
 
     elif mesh._meshType == "TREE":
-        if mesh.dim == 3:
-            core_inds = np.isin(
-                mesh.h_gridded,
-                np.r_[mesh.hx.min(), mesh.hy.min(), mesh.hz.min()]
-            ).all(axis=1)
+        # if mesh.dim == 3:
+        #     core_inds = np.isin(
+        #         mesh.h_gridded,
+        #         np.r_[mesh.hx.min(), mesh.hy.min(), mesh.hz.min()]
+        #     ).all(axis=1)
 
-            act_core_inds = actind[core_inds]
+        #     act_core_inds = actind[core_inds]
 
-            uniqXY = uniqueRows(mesh.gridCC[core_inds, :2])
-            npts = uniqXY[0].shape[0]
-            ZC = mesh.gridCC[core_inds, 2]
-            topoCC = np.zeros(npts)
-            if option == "top":
-                # TODO: this assume same hz, need to be modified
-                dz = mesh.hz.min() * 0.5
-            elif option == "center":
-                dz = 0.
-            for i in range(npts):
-                inds = uniqXY[2] == i
-                actind_z = act_core_inds[inds]
-                if actind_z.sum() > 0.:
-                    topoCC[i] = (ZC[inds][actind_z]).max() + dz
-                else:
-                    topoCC[i] = (ZC[inds]).max() + dz
-            return uniqXY[0], topoCC
-        else:
-            raise NotImplementedError(
-                "gettopoCC is not implemented for Quad tree mesh"
-                )
+        #     uniqXY = uniqueRows(mesh.gridCC[core_inds, :2])
+        #     npts = uniqXY[0].shape[0]
+        #     ZC = mesh.gridCC[core_inds, 2]
+        #     topoCC = np.zeros(npts)
+        #     if option == "top":
+        #         # TODO: this assume same hz, need to be modified
+        #         dz = mesh.hz.min() * 0.5
+        #     elif option == "center":
+        #         dz = 0.
+        #     for i in range(npts):
+        #         inds = uniqXY[2] == i
+        #         actind_z = act_core_inds[inds]
+        #         if actind_z.sum() > 0.:
+        #             topoCC[i] = (ZC[inds][actind_z]).max() + dz
+        #         else:
+        #             topoCC[i] = (ZC[inds]).max() + dz
+        #     return uniqXY[0], topoCC
+        # else:
+        #     raise NotImplementedError(
+        #         "gettopoCC is not implemented for Quad tree mesh"
+        #         )
+
+        inds = mesh.get_boundary_cells(actind, direction='zu')[0]
+
+        if option == "top":
+            dz = mesh.h_gridded[inds, 2] * 0.5
+        elif option == "center":
+            dz = 0.
+
+        return mesh.gridCC[inds, :2], mesh.gridCC[inds, 2] + dz
 
 
 def drapeTopotoLoc(mesh, pts, actind=None, option="top", topo=None):
@@ -1629,16 +1640,23 @@ def closestPointsGrid(grid, pts, dim=2):
     :return: nodeInds
     """
 
-    pts = asArray_N_x_Dim(pts, dim)
-    nodeInds = np.empty(pts.shape[0], dtype=int)
+    # pts = asArray_N_x_Dim(pts, dim)
+    # nodeInds = np.empty(pts.shape[0], dtype=int)
 
-    for i, pt in enumerate(pts):
-        if dim == 1:
-            nodeInds[i] = ((pt - grid)**2.).argmin()
-        else:
-            nodeInds[i] = (
-                (np.tile(
-                    pt, (grid.shape[0], 1)) - grid)**2.).sum(axis=1).argmin()
+    # for i, pt in enumerate(pts):
+    #     if dim == 1:
+    #         nodeInds[i] = ((pt - grid)**2.).argmin()
+    #     else:
+    #         nodeInds[i] = (
+    #             (np.tile(
+    #                 pt, (grid.shape[0], 1)) - grid)**2.).sum(axis=1).argmin()
+    if dim == 1:
+        nodeInds = np.asarray(
+            [np.abs(pt - grid).argmin() for pt in pts.tolist()], dtype=int
+        )
+    else:
+        tree = cKDTree(grid)
+        _, nodeInds = tree.query(pts)
 
     return nodeInds
 
