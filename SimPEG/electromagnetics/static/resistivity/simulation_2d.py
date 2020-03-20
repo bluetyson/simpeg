@@ -10,6 +10,8 @@ from .survey import Survey
 from .fields_2d import Fields_ky, Fields_ky_CC, Fields_ky_N
 from .fields import FieldsDC, Fields_CC, Fields_N
 from .boundary_utils import getxBCyBC_CC
+import dask
+import dask.array as da
 
 
 class BaseDCSimulation_2D(BaseEMSimulation):
@@ -87,6 +89,34 @@ class BaseDCSimulation_2D(BaseEMSimulation):
             for rx in src.receiver_list:
                 data[src, rx] = rx.eval(kys, src, self.mesh, f)
         return mkvc(data)
+
+    def getJtJdiag(self, m, W=None):
+        """
+            Return the diagonal of JtJ
+        """
+
+        if (self.gtgdiag is None):
+
+            # Need to check if multiplying weights makes sense
+            if W is None:
+                self.gtgdiag = da.sum((self.getJ(m))**2., 0).compute()
+            else:
+                self.gtgdiag = da.sum((self.getJ(m))**2., 0).compute()
+            #     from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler
+
+            #     with Profiler() as prof, ResourceProfiler(dt=0.25) as rprof, CacheProfiler() as cprof:
+            #         self.gtgdiag = da.sum((self.getJ(m))**2., 0).compute()
+
+            #     from dask.diagnostics import visualize
+            #     visualize([prof, rprof, cprof])
+                # WJ = da.from_delayed(
+                #         dask.delayed(csr.dot)(W, self.getJ(m)),
+                #         shape=self.getJ(m).shape,
+                #         dtype=float
+                # )
+                # self.gtgdiag = da.sum(WJ**2., 0).compute()
+
+        return self.gtgdiag
 
     def getJ(self, m, f=None):
         """
