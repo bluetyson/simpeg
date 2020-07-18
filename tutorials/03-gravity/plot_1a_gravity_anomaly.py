@@ -114,8 +114,8 @@ background_density = 0.0
 block_density = -0.2
 sphere_density = 0.2
 
-# Find the indecies for the active mesh cells (e.g. cells below surface)
-ind_active = surface2ind_topo(mesh, xyz_topo)
+# Find the indices for the active mesh cells (e.g. cells below surface)
+ind_active = surtypos face2ind_topo(mesh, xyz_topo)
 
 # Define mapping from model to active cells. The model consists of a value for
 # each cell below the Earth's surface.
